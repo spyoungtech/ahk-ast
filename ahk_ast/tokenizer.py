@@ -6,7 +6,6 @@ from sly import Lexer
 from sly.lex import Token
 
 from .utils import AHKTokenizeError
-from .utils import all_casings
 
 logger = logging.getLogger(__name__)
 # logger.addHandler(logging.StreamHandler(stream=sys.stderr))
@@ -30,9 +29,16 @@ class AHKToken(Token):
 
 
 class AHKLexer(Lexer):
+    def __init__(self, *args, **kwargs):
+        self._include_comments = kwargs.pop('include_whitespace', True)
+        super().__init__(*args, **kwargs)
+
     regex_module = re
-    reflags = re.DOTALL
+    reflags = re.MULTILINE
     tokens = {
+        ARROW,
+        AMP,
+        HASH,
         LBRACE,
         RBRACE,
         LBRACKET,
@@ -64,10 +70,12 @@ class AHKLexer(Lexer):
         ASSIGN,
         LPAREN,
         RPAREN,
+        REMATCH,
         QUESTION,
         PERCENT,
         TILDE,
-        CARET,
+        PIPE,
+        # CARET,
         BSHIFTL,
         BSHIFTR,
         LSHIFTR,
@@ -76,11 +84,15 @@ class AHKLexer(Lexer):
         LAND,
         LNOT,
         PLUS,
+        INCR,
         MINUS,
+        DECR,
         FLOAT,
         INTEGER,
         TIMES,
+        EXP,
         DIVIDE,
+        INT_DIVIDE,
         # Reserved words
         AND,
         AS,
@@ -114,6 +126,7 @@ class AHKLexer(Lexer):
         UNSET,
         UNTIL,
         WHILE,
+        CLASS,
     }
 
     # print(tokens)
@@ -124,10 +137,20 @@ class AHKLexer(Lexer):
     #     self.lineno += tok.value.count('\n')
 
     @_(r'/\*((.|\n))*?\*/')
-    def ignore_block_comment(self, tok):
+    def BLOCK_COMMENT(self, tok):
         self.lineno += tok.value.count('\n')
+        if self._include_comments:
+            return tok
 
-    ignore_comment = r';[^\n]*'
+    @_(r'[\u0009\u000B\u000C\u000D\u0020\u00A0\u2028\u2029\ufeff];[^\n]*')
+    def INLINE_COMMENT(self, tok):
+        if self._include_comments:
+            return tok
+
+    @_(r'^;[^\n]*')
+    def LINE_COMMENT(self, tok):
+        if self._include_comments:
+            return tok
 
     # _escape_sequences = [
     #     r'``',
@@ -143,18 +166,24 @@ class AHKLexer(Lexer):
     SINGLE_QUOTE_STRING = r"'(?:[^'`]|`.)*'"
 
     # Specify tokens as regex rules
+    HASH = r'#'
     BSHIFTL = r'<<'
     LSHIFTR = r'>>>'
     BSHIFTR = r'>>'
     PERCENT = r'%'
     LBRACKET = r'\['
     RBRACKET = r'\]'
-    CARET = r'\^'
+    # CARET = r'\^'
+    BOR = r'\^'
     QUESTION = r'\?'
     COMMA = r','
+    INCR = r'\+\+'
     PLUS = r'\+'
     MINUS = r'-'
+    DECR = r'--'
+    EXP = r'\*\*'
     TIMES = r'\*'
+    INT_DIVIDE = r'//'
     DIVIDE = r'/'
     FLOAT = r'(\d+\.\d*)|(\d*\.\d+)'  # 23.45
     INTEGER = r'\d+'
@@ -163,6 +192,7 @@ class AHKLexer(Lexer):
     # LOOKUP = r'\.[a-zA-Z_]([a-zA-Z_\d])*'
 
     # Reserved Keywords
+    CLASS = r'(?i)class'
     IF = r'(?i)if'
     ELSE = r'(?i)else'
     WHILE = r'(?i)while'
@@ -195,20 +225,33 @@ class AHKLexer(Lexer):
     LOCAL = r'(?i)local'
     THROW = r'(?i)throw'
     STATIC = r'(?i)static'
+    TRUE = r'(?i)true'
+    FALSE = r'(?i)false'
+
     NAME = r'[a-zA-Z_]([a-zA-Z_\d])*'
 
-    @_('[\u0009\u000A\u000B\u000C\u000D\u0020\u00A0\u2028\u2029\ufeff]+')
+    @_('\u000A')
+    def NEWLINE(self, tok: AHKToken):
+        self.lineno += 1
+        return tok
+
+    @_('[\u0009\u000B\u000C\u000D\u0020\u00A0\u2028\u2029\ufeff]+')
     def WHITESPACE(self, tok: AHKToken):
+        # We need to capture whitespace tokens because AHK has some sensitivity to whitespace
+        # For example ``func()`` is valid, but ``func ()`` is not.
+        # see: https://lexikos.github.io/v2/docs/Language.htm#general-conventions
         self.lineno += tok.value.count('\n')
         return tok
 
     # Put longer patterns first
 
-    # ARROW = r'=>'
+    ARROW = r'=>'
     LE = r'<='
     LT = r'<'  # Order matters a lot. Definition order is the order matches are tried.
     GE = r'>='
     GT = r'>'
+    REMATCH = r'~='
+    TILDE = r'~'
     SEQ = r'=='
     EQ = r'='
     SNE = r'!=='
@@ -220,7 +263,9 @@ class AHKLexer(Lexer):
     LBRACE = r'{'
     RBRACE = r'}'
     LOR = r'\|\|'
+    PIPE = r'\|'
     LAND = r'&&'
+    AMP = r'&'
     LNOT = r'!'
     DCOLON = r'::'
     COLON = r':'
@@ -230,8 +275,10 @@ class AHKLexer(Lexer):
             tok = AHKToken(tok, text)
             yield tok
 
-    def error(self, t):
-        raise AHKTokenizeError(f'Illegal character {t.value[0]!r} at index {self.index}', None)
+    def error(self, t: AHKToken):
+        raise AHKTokenizeError(
+            f'Illegal character {t.value[0]!r} at index {self.index} (line {self.lineno})', None
+        )
 
 
 def tokenize(text):

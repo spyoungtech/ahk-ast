@@ -1,0 +1,115 @@
+# WIP
+
+# This file is just for loose reference. It is an ATTEMPT at a formal grammar definition.
+# It has no real bearing on the parser and may even contain information that is technically incorrect.
+# For brevity, considerations of whitespace/spaces are currently omitted. However, AHK does have whitespace sensitivity
+
+# Tokens are in CAPS
+
+program : statements EOF
+
+statements : { statement }
+
+
+
+statement : assignment_statement
+          | augmented_assignment_statement
+          | if_statement
+          | loop_statement
+          | while_statement
+          | class_definition
+          | function_definition
+          | for_statement
+          | try_statement
+          | variable_declaration
+          | expression
+
+
+
+assignment_statement : location ASSIGN expression                         (:=)
+
+augmented_assignment_statement : location TIMES EQ expression             (*=)
+                               | location MINUS EQ expression             (-=)
+                               | location DIVIDE EQ expression            (/=)
+                               | location INT_DIVIDE EQ expression        (//=)
+                               | location DOT EQ expression               (.=)
+                               | location PIPE EQ expression              (|=)
+                               | location AMP EQ expression               (&=)
+                               | location CARET EQ expression             (^=)
+                               | location BSHIFTR EQ expression           (>>=)
+                               | location BSHIFTL EQ expression           (<<=)
+                               | location LSHIFTR EQ expression           (>>>=)
+
+
+
+expression : expression EXP expression         (**)
+           | expression PLUS expression        (+)
+           | expression MINUS expression       (-)
+           | expression TIMES expression       (*)
+           | expression DIVIDE expression      (/)
+           | expression LT expression          (<)
+           | expression LE expression          (<=)
+           | expression GT expression          (>)
+           | expression GE expression          (>=)
+           | expression EQ expression          (=)
+           | expression SEQ expression         (==)
+           | expression NE expression          (!=)
+           | expression SNE expression         (!==)
+           | expression LAND expression        (&&)
+           | expression REMATCH expression     (~=)
+           | expression LOR expression         (||)
+           | expression AND expression         (and)
+           | expression OR expression          (or)
+           | expression IN expression          (in)
+           | expression IS expression          (is)
+           | expression CONTAINS expression    (contains)
+           | PLUS expression                   # is this necessarily always allowed?
+           | MINUS expression                  # is this necessarily allowed?
+           | LNOT expression                   (!)
+           | LPAREN expression RPAREN          # subexpression (unless it's a line continuation?)
+           | location
+           | literal
+           | block
+           | location LPAREN [ expression_list ] RPAREN  # function call
+
+block : LBRACE statements RBRACE
+location : NAME
+         | NAME DOT NAME  # lookup   (x.y)
+         | NAME DOT deref #          (x.%z%)
+         # can expressions be used instead of names?
+
+
+deref : PERCENT expression PERCENT # double deref %foo%
+
+function_definition : NAME LPAREN [ parameters ] RPAREN LBRACE statements RBRACE
+                    | NAME LPAREN [ parameters ] RPAREN ARROW expression
+
+parameters : parameter { COMMA parameter }
+           | empty
+
+parameter : NAME  # are there other ways to specify parameters?
+
+try_statement    : TRY block [ catch_statements ] [ finally_statement ]
+
+catch_statements : catch_statement { catch_statement } [ catch_else_statement ]
+
+
+catch_statement : CATCH [ NAME ] [ AS NAME ] block
+
+
+# Else, as it applies to catch, is a bit different than if/elif/else
+catch_else_statement  : ELSE block
+                      | ELSE statement
+
+
+
+# note, there are a few variations of how if statements can be written
+if_statement    : IF expression block { else_statement }
+
+
+else_statement : ELSE statement
+               | ELSE if_statement  # elif (is this necessarily always legal syntax for all variations of if_statement?)
+               | ELSE block
+
+
+empty  :

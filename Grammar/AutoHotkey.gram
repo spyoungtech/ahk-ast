@@ -22,8 +22,10 @@ statement : assignment_statement
           | for_statement
           | try_statement
           | variable_declaration
-          | expression
+          | expression_statement  # expression statements? Not all expressions can be on their own! https://lexikos.github.io/v2/docs/Language.htm#expression-statements
 
+terminator : NEWLINE
+           | EOF # this is not quite correct -- newlines can terminate expressions, but technically so does the end of file
 
 
 assignment_statement : location ASSIGN expression                         (:=)
@@ -40,7 +42,42 @@ augmented_assignment_statement : location TIMES EQ expression             (*=)
                                | location BSHIFTL EQ expression           (<<=)
                                | location LSHIFTR EQ expression           (>>>=)
 
+grouping : LPAREN expression RPAREN  # subexpression (unless it's a line continuation?)
 
+
+# Things that can go on their own line. https://lexikos.github.io/v2/docs/Language.htm#expression-statements
+# These are legal when they START the line, but can also be have other expressions tacked on, like ``(expression) + 1``
+expression_statement : grouping
+                     | deref
+                     | function_call
+                     | tenary_expression
+
+
+operator : EXP
+         | PLUS
+         | MINUS
+         | TIMES
+         | DIVIDE
+         | LT
+         | LE
+         | GT
+         | GE
+         | EQ
+         | SEQ
+         | NE
+         | SNE
+         | LAND
+         | REMATCH
+         | LOR
+         | AND
+         | OR
+         | IN
+         | IS
+         | CONTAINS
+
+ expression_operator : operator
+                     | INCR
+                     | DECR
 
 expression : expression EXP expression         (**)
            | expression PLUS expression        (+)
@@ -65,8 +102,13 @@ expression : expression EXP expression         (**)
            | expression CONTAINS expression    (contains)
            | PLUS expression                   # is this necessarily always allowed?
            | MINUS expression                  # is this necessarily allowed?
+           | NAME INCR                         (x++)
+           | NAME DECR                         (x--)
+           | DECR NAME                         (--x)
+           | INCR NAME                         (++x)
            | LNOT expression                   (!)
-           | LPAREN expression RPAREN          # subexpression (unless it's a line continuation?)
+           | tenary_expression
+           | grouping
            | location
            | literal
            | block
@@ -101,7 +143,7 @@ catch_statement : CATCH [ NAME ] [ AS NAME ] block
 catch_else_statement  : ELSE block
                       | ELSE statement
 
-
+finally_statement : FINALLY block
 
 # note, there are a few variations of how if statements can be written
 if_statement    : IF expression block { else_statement }
@@ -111,5 +153,21 @@ else_statement : ELSE statement
                | ELSE if_statement  # elif (is this necessarily always legal syntax for all variations of if_statement?)
                | ELSE block
 
+
+
+# Whitespace sensitive features
+
+space : WHITESPACE  # whitespace excluding newlines
+
+whitespace : WHITESPACE  # whitespace including newlines
+           | WHITESPACE { whitespace }
+           | NEWLINE
+           | NEWLINE { whitespace }
+
+string : SINGLE_QUOTED_STRING
+       | DOUBLE_QUOTED_STRING
+       | expression space { space }  DOT { space } expression   # concatenation.
+                                                                # spaces are expressed here because it is needed for
+                                                                # disambiguation from lookups (see ``location :``)
 
 empty  :

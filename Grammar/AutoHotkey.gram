@@ -102,7 +102,7 @@ expression : expression EXP expression         (**)
            | expression CONTAINS expression    (contains)
            | PLUS expression                   # is this necessarily always allowed?
            | MINUS expression                  # is this necessarily allowed?
-           | NAME INCR                         (x++)
+           | NAME INCR                         (x++)  # are incr/decr allowed on things other than NAMEs?
            | NAME DECR                         (x--)
            | DECR NAME                         (--x)
            | INCR NAME                         (++x)
@@ -136,8 +136,12 @@ try_statement    : TRY block [ catch_statements ] [ finally_statement ]
 catch_statements : catch_statement { catch_statement } [ catch_else_statement ]
 
 
-catch_statement : CATCH [ NAME ] [ AS NAME ] block
+catch_statement : CATCH [ catch_exception_name ] block
 
+catch_exception_name : NAME
+                     | NAME AS NAME
+
+var_ref : AMP NAME
 
 # Else, as it applies to catch, is a bit different than if/elif/else
 catch_else_statement  : ELSE block
@@ -154,8 +158,44 @@ else_statement : ELSE statement
                | ELSE block
 
 
+name_or_empty : NAME
+              | empty
+
+
+
+for_statement : FOR name_or_empty { COMMA name_or_empty } IN expression statement
+              | FOR name_or_empty { COMMA name_or_empty } IN expression block
+
+
+function_definition : NAME LPAREN [ function_parameters ] RPAREN block
+
+function_parameters : parameter { COMMA parameter }
+
+
+# only some values are permitted as defaults for functions
+default_value : TRUE
+              | FALSE
+              | UNSET
+              | FLOAT
+              | INTEGER
+              | string
+
+parameter : NAME [ ASSIGN default_value ]
+          | AMP NAME [ ASSIGN default_value ]
+
+while_statement : WHILE expression block
+                | WHILE expression statement
+
+any_loop : LOOP
+         | LOOP_COUNT
+         | LOOP_REG
+         | LOOP_FILES
+         | LOOP_PARSE
+         | LOOP_READ
+
 
 # Whitespace sensitive features
+# These are not necessarily all whitespace-sentitive characteristics of AHK, but the features that can't be described without whitespace nuance
 
 space : WHITESPACE  # whitespace excluding newlines
 

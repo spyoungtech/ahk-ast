@@ -84,9 +84,6 @@ class Integer(Expression):
         assert isinstance(value, int)
         super().__init__(value=value)
 
-    def __str__(self):
-        return str(self.value)
-
 
 class Float(Expression):
     """
@@ -97,17 +94,11 @@ class Float(Expression):
         assert isinstance(value, float)
         super().__init__(value=value)
 
-    def __str__(self):
-        return '{:.6f}'.format(self.value)
-
 
 class Bool(Expression):
     def __init__(self, value):
         assert isinstance(value, bool)
         super().__init__(value=value)
-
-    def __str__(self):
-        return str(self.value)
 
 
 class UnaryOp(Expression):
@@ -122,9 +113,6 @@ class Identifier(Location):
     def __init__(self, name):
         assert isinstance(name, str)
         super().__init__(name=name)
-
-    def __str__(self):
-        return self.name
 
 
 class BinOp(Expression):

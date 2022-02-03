@@ -143,6 +143,10 @@ catch_exception_name : NAME
 
 var_ref : AMP NAME
 
+
+function_call : NAME LPAREN [ arguments ] RPAREN)
+
+
 # Else, as it applies to catch, is a bit different than if/elif/else
 catch_else_statement  : ELSE block
                       | ELSE statement

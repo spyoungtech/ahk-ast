@@ -45,5 +45,5 @@ def test_official_files(fp):
     expected = load_spec(spec_file)
     with open(fp) as f:
         text = f.read()
-    actual = parser.parse_source(text)
+    actual = parser.parse(text)
     assert expected == actual, ''

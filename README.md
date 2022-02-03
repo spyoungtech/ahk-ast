@@ -39,4 +39,29 @@ python -m ahk_ast.tokenizer myfile.ahk
 
 ## Parsing
 
-TBD
+```python
+import ahk_ast
+ahk_source = """\
+a := 1
+b := a + 1
+
+MsgBox b
+"""
+
+ahk_ast.parse(ahk_source)
+# Program(
+#     statements=(
+#         Assignment(location=Identifier(name="a"), value=Integer(value=1)),
+#         Assignment(
+#             location=Identifier(name="b"), value=BinOp(op="+", left=Identifier(name="a"), right=Integer(value=1))
+#         ),
+#         FunctionCall(name="MsgBox", arguments=(Identifier(name="b"),)),
+#     )
+# )
+
+```
+
+# Status
+
+This project is in its very early phases. Almost none of the language syntax is fully implemented into the parser.
+The tokenizer has most the tokens that exist for AHK, but is still very much subject to change.

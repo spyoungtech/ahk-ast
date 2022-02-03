@@ -162,7 +162,7 @@ def parse_tokens(raw_tokens):
     return parser.parse(raw_tokens)
 
 
-def parse_source(text):
+def parse(text):
     tokens = tokenize(text)
     model = parse_tokens(tokens)
     return model

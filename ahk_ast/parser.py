@@ -78,25 +78,6 @@ class AHKParser(Parser):
 
     @_(
         'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
-        'expression { WHITESPACE } bin_operator { WHITESPACE } expression',
     )
     def bin_op(self, p):
         op = p[2]

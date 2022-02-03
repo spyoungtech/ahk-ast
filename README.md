@@ -1,5 +1,10 @@
 # ahk-ast
 
+![example workflow](https://github.com/spyoungtech/ahk-ast/actions/workflows/unittests.yaml/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/spyoungtech/ahk-ast/badge.svg?branch=main)](https://coveralls.io/github/spyoungtech/ahk-ast?branch=main)
+
+
+
 This is an attempt at implementing a parser for AutoHotkey using a LALR(1) parser generator (provided by `sly`).
 Ultimately, the ability to parse AHK syntax programmatically will help in the production of other tools, such as
 linters, code formatters, compilers, and more.

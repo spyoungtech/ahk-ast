@@ -107,7 +107,7 @@ expression : expression EXP expression         (**)
            | DECR NAME                         (--x)
            | INCR NAME                         (++x)
            | LNOT expression                   (!)
-           | tenary_expression
+           | ternary_expression
            | grouping
            | location
            | literal

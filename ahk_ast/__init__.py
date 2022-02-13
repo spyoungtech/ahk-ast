@@ -1,1 +1,1 @@
-from .parser import parse
+from ahk_ast.parser import parse

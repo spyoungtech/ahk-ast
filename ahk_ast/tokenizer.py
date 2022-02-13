@@ -1,11 +1,16 @@
 import logging
+import os
 import sys
+from typing import Any
+from typing import Generator
+from typing import Iterable
+from typing import NoReturn
+from typing import Sequence
+from typing import Union
 
-import regex as re
-from sly import Lexer
-from sly.lex import Token
-
-from .utils import AHKTokenizeError
+import regex as re  # type: ignore[import]
+from sly import Lexer  # type: ignore[import]
+from sly.lex import Token  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
 # logger.addHandler(logging.StreamHandler(stream=sys.stderr))
@@ -15,7 +20,7 @@ class AHKToken(Token):
     Representation of a single token.
     '''
 
-    def __init__(self, tok, doc):
+    def __init__(self, tok: Token, doc: str):
         self.type = tok.type
         self.value = tok.value
         self.lineno = tok.lineno
@@ -24,12 +29,12 @@ class AHKToken(Token):
 
     __slots__ = ('type', 'value', 'lineno', 'index', 'doc')
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'AHKToken(type={self.type!r}, value={self.value!r}, lineno={self.lineno}, index={self.index})'
 
 
 class AHKLexer(Lexer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         self._include_comments = kwargs.pop('include_whitespace', True)
         super().__init__(*args, **kwargs)
 
@@ -128,6 +133,7 @@ class AHKLexer(Lexer):
         WHILE,
         CLASS,
         NEWLINE,
+        DOLLAR,
     }
 
     # print(tokens)
@@ -137,21 +143,24 @@ class AHKLexer(Lexer):
     # def ignore_newline(self, tok):
     #     self.lineno += tok.value.count('\n')
 
-    @_(r'/\*((.|\n))*?\*/')
-    def BLOCK_COMMENT(self, tok):
+    @_(r'/\*((.|\n))*?\*/')  # type: ignore
+    def BLOCK_COMMENT(self, tok: Token) -> Union[Token, None]:
         self.lineno += tok.value.count('\n')
         if self._include_comments:
             return tok
+        return None
 
-    @_(r'[\u0009\u000B\u000C\u000D\u0020\u00A0\u2028\u2029\ufeff];[^\n]*')
-    def INLINE_COMMENT(self, tok):
+    @_(r'[\u0009\u000B\u000C\u000D\u0020\u00A0\u2028\u2029\ufeff];[^\n]*')  # type: ignore[name-defined]
+    def INLINE_COMMENT(self, tok: Token) -> Union[Token, None]:
         if self._include_comments:
             return tok
+        return None
 
-    @_(r'^;[^\n]*')
-    def LINE_COMMENT(self, tok):
+    @_(r'^;[^\n]*')  # type: ignore[name-defined]
+    def LINE_COMMENT(self, tok: Token) -> Union[Token, None]:
         if self._include_comments:
             return tok
+        return None
 
     # _escape_sequences = [
     #     r'``',
@@ -167,6 +176,7 @@ class AHKLexer(Lexer):
     SINGLE_QUOTE_STRING = r"'(?:[^'`]|`.)*'"
 
     # Specify tokens as regex rules
+    DOLLAR = r'\$'
     HASH = r'#'
     BSHIFTL = r'<<'
     LSHIFTR = r'>>>'
@@ -231,13 +241,13 @@ class AHKLexer(Lexer):
 
     NAME = r'[a-zA-Z_]([a-zA-Z_\d])*'
 
-    @_('\u000A')
-    def NEWLINE(self, tok: AHKToken):
+    @_('\u000A')  # type: ignore[name-defined]
+    def NEWLINE(self, tok: Token) -> Token:
         self.lineno += 1
         return tok
 
-    @_('[\u0009\u000B\u000C\u000D\u0020\u00A0\u2028\u2029\ufeff]+')
-    def WHITESPACE(self, tok: AHKToken):
+    @_('[\u0009\u000B\u000C\u000D\u0020\u00A0\u2028\u2029\ufeff]+')  # type: ignore[name-defined]
+    def WHITESPACE(self, tok: Token) -> Token:
         # We need to capture whitespace tokens because AHK has some sensitivity to whitespace
         # For example ``func()`` is valid, but ``func ()`` is not.
         # see: https://lexikos.github.io/v2/docs/Language.htm#general-conventions
@@ -271,30 +281,34 @@ class AHKLexer(Lexer):
     DCOLON = r'::'
     COLON = r':'
 
-    def tokenize(self, text, *args, **kwargs):
+    def tokenize(self, text: str, *args: Any, **kwargs: Any) -> Generator[Token, None, None]:
         for tok in super().tokenize(text, *args, **kwargs):
             tok = AHKToken(tok, text)
             yield tok
 
-    def error(self, t: AHKToken):
+    def error(self, t: AHKToken) -> NoReturn:
+        from .errors import AHKTokenizeError
+
         raise AHKTokenizeError(
             f'Illegal character {t.value[0]!r} at index {self.index} (line {self.lineno})', None
         )
 
 
-def tokenize(text):
+def tokenize(text: str) -> Generator[Token, None, None]:
     lexer = AHKLexer()
     tokens = lexer.tokenize(text)
     return tokens
 
 
 # Main program to test on input files
-def main(filename):
+def main(filename: Union[str, os.PathLike[str]]) -> None:
     with open(filename) as file:
         text = file.read()
 
     for tok in tokenize(text):
         print(tok)
+
+    return None
 
 
 if __name__ == '__main__':

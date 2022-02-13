@@ -6,9 +6,9 @@
 
 # Tokens are in CAPS
 
-program : statements EOF
+program : [ statements ] EOF
 
-statements : { statement }
+statements : statement { statement }
 
 
 
@@ -19,6 +19,7 @@ statement : assignment_statement
           | while_statement
           | class_definition
           | function_definition
+          | hotkey_definition
           | for_statement
           | try_statement
           | variable_declaration
@@ -51,6 +52,7 @@ expression_statement : grouping
                      | deref
                      | function_call
                      | tenary_expression
+
 
 
 operator : EXP
@@ -146,6 +148,28 @@ var_ref : AMP NAME
 
 function_call : NAME LPAREN [ arguments ] RPAREN)
 
+
+hotkey_definition : hotkey DCOLON hotkey_action
+
+hotkey_action : statement
+              | expression_statement
+              | block
+              | hotkey_definition  # stacked definitions
+              | function_definition  # Named Function Hotkeys https://lexikos.github.io/v2/docs/Hotkeys.htm#Function
+
+
+hotkey : [ hotkey_modifier ] keyname [ AMP second_hotkey ]
+
+# hotkey but without the option to combine another using &
+second_hotkey : [ hotkey_modifier ] keyname
+
+hotkey_modifier : { HASH | LNOT | CARET | PLUS | LT | GT | TIMES | TILDE | DOLLAR }
+
+
+keyname : NAME
+        | INTEGER
+        | NAME NAME # e.g. "LWin Up"
+        # INTEGER NAME # 1 Up?
 
 # Else, as it applies to catch, is a bit different than if/elif/else
 catch_else_statement  : ELSE block

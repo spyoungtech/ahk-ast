@@ -46,4 +46,4 @@ def test_official_files(fp):
     with open(fp) as f:
         text = f.read()
     actual = parser.parse(text)
-    assert expected == actual, ''
+    assert actual == expected

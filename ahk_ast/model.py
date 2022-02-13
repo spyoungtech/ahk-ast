@@ -1,10 +1,12 @@
 from collections.abc import Iterable
-from textwrap import dedent
 from types import SimpleNamespace as _SimpleNamespace
+from typing import Optional
+from typing import Sequence
+from typing import Union
 
 
 class Node(_SimpleNamespace):
-    def __eq__(self, other: 'Node'):
+    def __eq__(self, other: 'Node') -> bool:  # type: ignore[override]
         if not isinstance(other, Node):
             return False
         for key, value in self.__dict__.items():
@@ -18,7 +20,7 @@ class Node(_SimpleNamespace):
                 return False
         return True
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         rep = (
             f'{self.__class__.__name__}('
             + ', '.join(
@@ -29,7 +31,7 @@ class Node(_SimpleNamespace):
         )
         try:
             return black_format_code(rep)
-        except ImportError as e:
+        except ImportError:
             # Just in case you don't have `black` installed :-)
             return rep
         except Exception as e:
@@ -38,10 +40,6 @@ class Node(_SimpleNamespace):
 
 
 class Statement(Node):
-    ...
-
-
-class Definition(Statement):
     ...
 
 
@@ -67,7 +65,7 @@ class FieldLookup(Location):
     p.y
     """
 
-    def __init__(self, location, fieldname, nested=False):
+    def __init__(self, location: Location, fieldname: str, nested: bool = False):
         assert isinstance(
             location, Location
         ), f'Expected Location. got {type(location)} {repr(location)}'
@@ -80,7 +78,7 @@ class Integer(Expression):
     Example: 42
     """
 
-    def __init__(self, value):
+    def __init__(self, value: int):
         assert isinstance(value, int)
         super().__init__(value=value)
 
@@ -90,19 +88,19 @@ class Float(Expression):
     Example: 42.0
     """
 
-    def __init__(self, value):
+    def __init__(self, value: float):
         assert isinstance(value, float)
         super().__init__(value=value)
 
 
 class Bool(Expression):
-    def __init__(self, value):
+    def __init__(self, value: bool):
         assert isinstance(value, bool)
         super().__init__(value=value)
 
 
 class UnaryOp(Expression):
-    def __init__(self, op, operand):
+    def __init__(self, op: str, operand: Expression):
         assert isinstance(op, str)
         assert op in ('+', '-', '!'), f'Invalid Unary operand: {op}'
         assert isinstance(operand, Expression)
@@ -110,7 +108,7 @@ class UnaryOp(Expression):
 
 
 class Identifier(Location):
-    def __init__(self, name):
+    def __init__(self, name: str):
         assert isinstance(name, str)
         super().__init__(name=name)
 
@@ -120,7 +118,7 @@ class BinOp(Expression):
     Example: left + right
     """
 
-    def __init__(self, op, left, right):
+    def __init__(self, op: str, left: Expression, right: Expression):
         assert isinstance(op, str)
         assert op in (
             '+',
@@ -142,22 +140,6 @@ class BinOp(Expression):
         assert isinstance(right, Expression)
         super().__init__(op=op, left=left, right=right)
 
-    @classmethod
-    def add(cls, left, right):
-        return cls(op='+', left=left, right=right)
-
-    @classmethod
-    def subtract(cls, left, right):
-        return cls(op='-', left=left, right=right)
-
-    @classmethod
-    def mult(cls, left, right):
-        return cls(op='*', left=left, right=right)
-
-    @classmethod
-    def div(cls, left, right):
-        return cls(op='/', left=left, right=right)
-
 
 class Compare(BinOp):
     """
@@ -166,27 +148,27 @@ class Compare(BinOp):
     """
 
     @classmethod
-    def lt(cls, left, right):
+    def lt(cls, left: Expression, right: Expression) -> 'Compare':
         return cls(left=left, right=right, op='<')
 
     @classmethod
-    def lte(cls, left, right):
+    def lte(cls, left: Expression, right: Expression) -> 'Compare':
         return cls(left=left, right=right, op='<=')
 
     @classmethod
-    def gt(cls, left, right):
+    def gt(cls, left: Expression, right: Expression) -> 'Compare':
         return cls(left=left, right=right, op='>')
 
     @classmethod
-    def gte(cls, left, right):
+    def gte(cls, left: Expression, right: Expression) -> 'Compare':
         return cls(left=left, right=right, op='>=')
 
     @classmethod
-    def eq(cls, left, right):
+    def eq(cls, left: Expression, right: Expression) -> 'Compare':
         return cls(left=left, right=right, op='==')
 
     @classmethod
-    def ne(cls, left, right):
+    def ne(cls, left: Expression, right: Expression) -> 'Compare':
         return cls(left=left, right=right, op='!=')
 
 
@@ -195,19 +177,19 @@ class Program(Node):
     Collection of statements
     """
 
-    def __init__(self, *statements):
+    def __init__(self, *statements: Statement):
         super().__init__(statements=tuple(statements))
         for stmt in self.statements:
             assert isinstance(stmt, Statement), f'{stmt} is not a statement'
 
 
-class Clause(Node):
+class Block(ExpressionStatement):
     """
     Example: LBRACE statements RBRACE
     Should work for if statements, function definitions too maybe?
     """
 
-    def __init__(self, *statements):
+    def __init__(self, *statements: Statement):
         super().__init__(statements=list(statements))
         for stmt in self.statements:
             assert isinstance(stmt, Statement), f'{stmt} is not a statement'
@@ -218,11 +200,13 @@ class IfStatement(Statement):
     IF expr LBRACE statements RBRACE [ ELSE LBRACE statements RBRACE ]
     """
 
-    def __init__(self, condition, consequent, alternative=None):
+    def __init__(
+        self, condition: Expression, consequent: Block, alternative: Optional[Block] = None
+    ):
         assert isinstance(condition, Expression)
-        assert isinstance(consequent, Clause)
+        assert isinstance(consequent, Block)
         if alternative is not None:
-            assert isinstance(alternative, Clause)
+            assert isinstance(alternative, Block)
         super().__init__(condition=condition, consequent=consequent, alternative=alternative)
 
 
@@ -231,7 +215,7 @@ class Assignment(Statement):
     location ASSIGN expression SEMI
     """
 
-    def __init__(self, location, value):
+    def __init__(self, location: Location, value: Expression):
         assert isinstance(location, Location)
         assert isinstance(value, Expression)
         super().__init__(location=location, value=value)
@@ -244,9 +228,9 @@ class AugmentedAssignment(Assignment):
 
 
 class WhileLoop(Statement):
-    def __init__(self, condition, body):
+    def __init__(self, condition: Expression, body: Block):
         assert isinstance(condition, Expression)
-        assert isinstance(body, Clause)
+        assert isinstance(body, Block)
         super().__init__(condition=condition, body=body)
 
 
@@ -255,43 +239,62 @@ class ForLoop(Statement):
     FOR location{additional_locations} IN expr
     """
 
-    def __init__(self, location, expression):
+    def __init__(self, location: Location, expression: Expression):
         assert isinstance(location, Location)
         assert isinstance(expression, Expression)
         super().__init__(location=location)
 
 
 class Parameter(Node):
-    def __init__(self, name, type):
+    def __init__(self, name: str, default_value: Optional[Expression] = None):
         assert isinstance(name, str)
-        assert isinstance(type, str)
-        super().__init__(name=name, type=type)
+        if default_value is not None:
+            assert isinstance(default_value, Expression)
+        super().__init__(name=name)
 
 
-class FunctionDefinition(Definition):
-    def __init__(self, name, parameters, rtype, body):
+class FunctionDefinition(Statement):
+    def __init__(self, name: str, parameters: Union[None, Sequence[Parameter]], body: Block):
         assert isinstance(name, str)
         assert parameters is None or isinstance(parameters, Iterable)
         parameters = tuple(parameters) if parameters else tuple()
         assert all(isinstance(param, Parameter) for param in parameters)
-        assert rtype is None or isinstance(rtype, str)
-        assert isinstance(body, Clause)
-        super().__init__(name=name, parameters=parameters, rtype=rtype, body=body)
+        assert isinstance(body, Block)
+        super().__init__(name=name, parameters=parameters, body=body)
 
 
 class ReturnStatement(Statement):
-    def __init__(self, expression):
-        assert isinstance(expression, Expression)
+    def __init__(self, expression: Optional[Expression]):
+        if expression is not None:
+            assert isinstance(expression, Expression)
         super().__init__(expression=expression)
 
 
 class FunctionCall(ExpressionStatement):
-    def __init__(self, name, arguments):
+    def __init__(self, name: str, arguments: Union[Sequence[Expression], None]):
         assert isinstance(name, str)  # can functions be stored at locations?
         assert arguments is None or isinstance(arguments, Iterable)
         arguments = tuple(arguments) if arguments else tuple()
         assert all(isinstance(arg, Expression) for arg in arguments)
         super().__init__(name=name, arguments=arguments)
+
+
+class Hotkey(Node):
+    def __init__(self, keyname: str, modifiers: Optional[str] = None):
+        assert isinstance(keyname, str)
+        if modifiers is not None:
+            assert isinstance(modifiers, str)
+            assert modifiers  # can't be empty string
+        super().__init__(keyname=keyname, modifiers=modifiers)
+
+
+class HotkeyDefinition(Statement):
+    def __init__(self, hotkey: Hotkey, action: Statement, second_hotkey: Optional[Hotkey] = None):
+        assert isinstance(hotkey, Hotkey)
+        assert isinstance(action, Statement)
+        if second_hotkey is not None:
+            assert isinstance(second_hotkey, Hotkey)
+        super().__init__(hotkey=hotkey, action=action, second_hotkey=second_hotkey)
 
 
 class BreakStatement(Statement):
@@ -307,22 +310,33 @@ class Grouping(Expression):
     LPAREN expression RPAREN
     """
 
-    def __init__(self, expression):
+    def __init__(self, expression: Expression):
         assert isinstance(expression, Expression)
         super().__init__(expression=expression)
+
+
+class String(Expression):
+    def __init__(self, value: str):
+        assert isinstance(value, str)
+        super().__init__(value=value)
+
+
+class DoubleQuotedString(String):
+    ...
+
+
+class SingleQuotedString(String):
+    ...
 
 
 from functools import lru_cache
 
 
 @lru_cache(maxsize=1024)
-def black_format_code(source):
+def black_format_code(source: str) -> str:
     import black
 
-    kwargs = {
-        'line_length': 120,
-    }
     reformatted_source = black.format_file_contents(
-        source, fast=True, mode=black.FileMode(**kwargs)
+        source, fast=True, mode=black.FileMode(line_length=120)
     )
     return reformatted_source

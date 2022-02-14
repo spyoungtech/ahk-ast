@@ -279,6 +279,10 @@ class FunctionCall(ExpressionStatement):
         super().__init__(name=name, arguments=arguments)
 
 
+class FunctionCallStatement(FunctionCall):
+    pass  # distinguish `MsgBox "foo"` from `MsgBox("foo")`
+
+
 class Hotkey(Node):
     def __init__(self, keyname: str, modifiers: Optional[str] = None):
         assert isinstance(keyname, str)

@@ -1,4 +1,5 @@
 from typing import Any
+from typing import Generator
 from typing import Sequence
 from typing import Union
 
@@ -17,6 +18,7 @@ from .tokenizer import tokenize
 class AHKParser(Parser):
     debugfile = 'parser.out'
     tokens = AHKLexer.tokens
+    start = 'program'
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
@@ -28,6 +30,41 @@ class AHKParser(Parser):
         self.seen_tokens = []
         self.expecting: list[AHKToken]
         self.expecting = []
+        self._consuming_whitespace = True
+        self._continuations_allowed = False
+
+    def _token_gen(self, tokens: Iterable[Token]) -> Generator[Token, None, None]:
+        t = None
+        for t in tokens:
+            self.last_token = t
+            if self._consuming_whitespace and t.type == 'WHITESPACE':
+                # skip unimportant whitespace
+                # self._consuming_whitespace will be set to False when whitespace is important
+                continue
+            yield t
+
+        if t is not None and t.type != 'NEWLINE':
+            tok = Token()
+            tok.type = 'NEWLINE'
+            tok.value = '\n'
+            tok.lineno = t.lineno
+            yield tok
+
+    def parse(self, tokens: Iterable[Token]) -> Any:
+        tokens = self._token_gen(tokens)
+        return super().parse(tokens)
+
+    @_('')
+    def begin(self, p: YaccProduction) -> Any:
+        ...
+
+    @_('')
+    def eof(self, p: YaccProduction) -> Any:
+        ...
+
+    @_('')
+    def seen_NEWLINE(self, p: YaccProduction) -> Any:
+        ...
 
     @_('statements')
     def program(self, p: YaccProduction) -> Any:
@@ -64,7 +101,8 @@ class AHKParser(Parser):
     @_(
         # 'grouping'
         # 'deref'
-        'function_call'
+        'function_call',
+        'function_call_statement'
         # 'tenary_expression'
     )
     def expression_statement(self, p: YaccProduction) -> Any:
@@ -137,9 +175,9 @@ class AHKParser(Parser):
     def expression(self, p: YaccProduction) -> Any:
         return Integer(value=int(p.INTEGER))
 
-    @_('NEWLINE [ WHITESPACE ] NAME [ WHITESPACE ] [ arguments ] terminator')
-    def function_call(self, p: YaccProduction) -> FunctionCall:
-        return FunctionCall(name=p.NAME, arguments=p.arguments)
+    @_('seen_NEWLINE NEWLINE [ WHITESPACE ] NAME [ WHITESPACE ] [ arguments ] terminator')
+    def function_call_statement(self, p: YaccProduction) -> FunctionCallStatement:
+        return FunctionCallStatement(name=p.NAME, arguments=p.arguments)
 
     @_('COMMA [ WHITESPACE ] first_argument')
     def additional_arguments(self, p: YaccProduction) -> Any:
@@ -160,9 +198,9 @@ class AHKParser(Parser):
     def assignment_statement(self, p: YaccProduction) -> Any:
         return Assignment(location=p.location, value=p.expression)
 
-    @_('NEWLINE')
+    @_('seen_NEWLINE NEWLINE')
     def terminator(self, p: YaccProduction) -> Any:
-        return p[0]
+        return p[1]
 
 
 def parse_tokens(raw_tokens: Iterable['Token']) -> Node:

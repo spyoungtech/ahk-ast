@@ -40,7 +40,9 @@ class AHKLexer(Lexer):
 
     regex_module = re
     reflags = re.MULTILINE
+
     tokens = {
+        EOF,
         ARROW,
         AMP,
         HASH,
@@ -281,7 +283,7 @@ class AHKLexer(Lexer):
     DCOLON = r'::'
     COLON = r':'
 
-    def tokenize(self, text: str, *args: Any, **kwargs: Any) -> Generator[Token, None, None]:
+    def tokenize(self, text: str, *args: Any, **kwargs: Any) -> Generator[AHKToken, None, None]:
         for tok in super().tokenize(text, *args, **kwargs):
             tok = AHKToken(tok, text)
             yield tok

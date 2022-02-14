@@ -45,12 +45,10 @@ class AHKParser(Parser):
 
     @_('NEWLINE [ WHITESPACE ] [ statements ]')
     def additional_statement(self, p: YaccProduction) -> Any:
-        print('ADDITIONAL SEEN')
         return p.statements
 
     @_('statement { additional_statement }')
     def statements(self, p: YaccProduction) -> Any:
-        print(p.statement, p.additional_statement)
         ret = [p.statement]
         for stmts in p.additional_statement:
             if stmts:

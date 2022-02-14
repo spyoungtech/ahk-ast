@@ -1,5 +1,7 @@
+import sys
 from typing import Any
 from typing import Generator
+from typing import NoReturn
 from typing import Sequence
 from typing import Union
 
@@ -8,6 +10,8 @@ from sly.lex import Token  # type: ignore[import]
 from sly.yacc import YaccProduction  # type: ignore[import]
 
 from .errors import AHKAstBaseException
+from .errors import AHKDecodeError
+from .errors import AHKParsingException
 from .errors import InvalidHotkeyException
 from .model import *
 from .tokenizer import AHKLexer
@@ -28,156 +32,69 @@ class AHKParser(Parser):
         self.last_token = None
         self.seen_tokens: list[AHKToken]
         self.seen_tokens = []
-        self.expecting: list[AHKToken]
+        self.expecting: list[list[str]]
         self.expecting = []
-        self._consuming_whitespace = True
-        self._continuations_allowed = False
 
-    def _token_gen(self, tokens: Iterable[Token]) -> Generator[Token, None, None]:
-        t = None
-        for t in tokens:
-            self.last_token = t
-            if self._consuming_whitespace and t.type == 'WHITESPACE':
-                # skip unimportant whitespace
-                # self._consuming_whitespace will be set to False when whitespace is important
-                continue
-            yield t
-
-        if t is not None and t.type != 'NEWLINE':
-            tok = Token()
-            tok.type = 'NEWLINE'
-            tok.value = '\n'
-            tok.lineno = t.lineno
-            yield tok
-
-    def parse(self, tokens: Iterable[Token]) -> Any:
-        tokens = self._token_gen(tokens)
-        return super().parse(tokens)
-
-    @_('')
-    def begin(self, p: YaccProduction) -> Any:
-        ...
-
-    @_('')
-    def eof(self, p: YaccProduction) -> Any:
-        ...
-
-    @_('')
-    def seen_NEWLINE(self, p: YaccProduction) -> Any:
-        ...
-
-    @_('statements')
-    def program(self, p: YaccProduction) -> Any:
+    @_('WHITESPACE', 'NEWLINE')
+    def wsc(self, p: YaccProduction) -> Any:
         return p[0]
 
-    # statements : { statement }      # zero or more statements { }
-    @_('{ statement }')
-    def statements(self, p: YaccProduction) -> Any:
-        # p.statement   --- it's already a list of statement (by SLY)
-        return Program(*p.statement)
+    @_('{ wsc } statements { wsc }')
+    def program(self, p: YaccProduction) -> Any:
+        return Program(*p.statements)
 
-    @_(
-        'assignment_statement',
-        # 'augmented_assignment_statement',
-        # 'if_statement',
-        # 'loop_statement',
-        # 'while_statement',
-        # 'class_definition',
-        # 'function_definition',
-        # 'hotkey_definition',
-        # 'for_statement',
-        # 'try_statement',
-        # 'variable_declaration',
-        'expression_statement',
-        'return_statement',
-    )
+    @_('NEWLINE [ WHITESPACE ] [ statements ]')
+    def additional_statement(self, p: YaccProduction) -> Any:
+        print('ADDITIONAL SEEN')
+        return p.statements
+
+    @_('statement { additional_statement }')
+    def statements(self, p: YaccProduction) -> Any:
+        print(p.statement, p.additional_statement)
+        ret = [p.statement]
+        for stmts in p.additional_statement:
+            if stmts:
+                ret.extend(stmts)
+        return ret
+
+    @_('assignment_statement', 'function_call_statement')
     def statement(self, p: YaccProduction) -> Any:
         return p[0]
 
-    @_('RETURN [ WHITESPACE expression ]')
-    def return_statement(self, p: YaccProduction) -> Any:
-        return ReturnStatement(expression=p.expression)
-
-    @_(
-        # 'grouping'
-        # 'deref'
-        'function_call',
-        'function_call_statement'
-        # 'tenary_expression'
-    )
-    def expression_statement(self, p: YaccProduction) -> Any:
-        return p[0]
-
-    @_(
-        'EXP',
-        'PLUS',
-        'MINUS',
-        'TIMES',
-        'DIVIDE',
-        'LT',
-        'LE',
-        'GT',
-        'GE',
-        'EQ',
-        'SEQ',
-        'NE',
-        'SNE',
-        'LAND',
-        'REMATCH',
-        'LOR',
-        'AND',
-        'OR',
-        'IN',
-        'IS',
-    )
-    def bin_operator(self, p: YaccProduction) -> Any:
-        return p[0]
-
-    @_(
-        'expression [ WHITESPACE ] bin_operator [ WHITESPACE ] expression',
-    )
-    def bin_op(self, p: YaccProduction) -> Any:
-        op = p.bin_operator
-        left = p.expression0
-        right = p.expression1
-        return BinOp(op=op, left=left, right=right)
-
     @_('NAME')
     def location(self, p: YaccProduction) -> Any:
-        return Identifier(name=p.NAME)
+        return Identifier(name=p[0])
 
-    @_('TRUE')
-    def expression(self) -> Any:
-        return Bool(True)
+    @_('')
+    def seen_ASSIGN(self, p: YaccProduction) -> Any:
+        self.expecting.append(['expression'])
 
-    @_('FALSE')
-    def expression(self) -> Any:
-        return Bool(False)
+    @_('location [ WHITESPACE ] ASSIGN seen_ASSIGN [ WHITESPACE ] expression')
+    def assignment_statement(self, p: YaccProduction) -> Assignment:
+        return Assignment(location=p.location, value=p.expression)
 
-    @_(
-        'expression_statement',
-        'bin_op',
-        'location',
-    )
+    @_('literal', 'location')
     def expression(self, p: YaccProduction) -> Any:
+        self.expecting.pop()
         return p[0]
 
-    @_('NAME LPAREN [ WHITESPACE ] RPAREN')
-    def function_call(self, p: YaccProduction) -> Any:
-        return FunctionCall(name=p.NAME, arguments=None)
-
-    @_('NAME LPAREN [ WHITESPACE ] arguments RPAREN')
-    def function_call(self, p: YaccProduction) -> Any:
-        function_name = p.NAME
-        return FunctionCall(name=function_name, arguments=p.arguments)
-
     @_('INTEGER')
-    def expression(self, p: YaccProduction) -> Any:
-        return Integer(value=int(p.INTEGER))
+    def literal(self, p: YaccProduction) -> Integer:
+        return Integer(value=int(p[0]))
 
-    @_('seen_NEWLINE NEWLINE [ WHITESPACE ] NAME [ WHITESPACE ] [ arguments ] terminator')
-    def function_call_statement(self, p: YaccProduction) -> FunctionCallStatement:
-        return FunctionCallStatement(name=p.NAME, arguments=p.arguments)
+    @_('DOUBLE_QUOTED_STRING')
+    def string(self, p: YaccProduction) -> DoubleQuotedString:
+        # TODO: unescape value
+        return DoubleQuotedString(value=p[0][1:-1])
+
+    @_('SINGLE_QUOTED_STRING')
+    def string(self, p: YaccProduction) -> SingleQuotedString:
+        # TODO: unescape value
+        return SingleQuotedString(value=p[0][1:-1])
+
+    @_('string')
+    def literal(self, p: YaccProduction) -> Any:
+        return p[0]
 
     @_('COMMA [ WHITESPACE ] first_argument')
     def additional_arguments(self, p: YaccProduction) -> Any:
@@ -188,27 +105,83 @@ class AHKParser(Parser):
         return p[0]
 
     @_('first_argument { additional_arguments }')
-    def arguments(self, p: YaccProduction) -> Any:
+    def function_call_statement_arguments(self, p: YaccProduction) -> Any:
         args = [p.first_argument]
         for a in p.additional_arguments:
             args.append(a)
         return args
 
-    @_('location [ WHITESPACE ] ASSIGN [ WHITESPACE ] expression terminator')
-    def assignment_statement(self, p: YaccProduction) -> Any:
-        return Assignment(location=p.location, value=p.expression)
+    @_('')
+    def seen_function_call_statement_start(self, p: YaccProduction) -> Any:
+        self.expecting.append(['expression'])
 
-    @_('seen_NEWLINE NEWLINE')
-    def terminator(self, p: YaccProduction) -> Any:
-        return p[1]
+    @_(
+        'location [ WHITESPACE ] [ seen_function_call_statement_start function_call_statement_arguments ]'
+    )
+    def function_call_statement(self, p: YaccProduction) -> FunctionCallStatement:
+        return FunctionCallStatement(
+            func_location=p.location, arguments=p.function_call_statement_arguments
+        )
+
+    def error(self, token: Union[AHKToken, None]) -> NoReturn:
+        if token:
+            if self.expecting:
+                expected = self.expecting[-1]
+
+                message = f"Syntax Error. Was expecting {' or '.join(expected)}"
+            else:
+                message = 'Syntax Error'
+            raise AHKParsingException(message, token)
+
+        elif self.last_token:
+            doc = self.last_token.doc
+            pos = len(doc)
+            lineno = doc.count('\n', 0, pos) + 1
+            colno = pos - doc.rfind('\n', 0, pos)
+            message = f'Unexpected EOF at: ' f'line {lineno} column {colno} (char {pos})'
+            if self.expecting:
+                expected = self.expecting[-1]
+                message += f'. Was expecting {" or ".join(expected)}'
+            raise AHKParsingException(message, None)
+        else:
+            #  Empty file
+            raise AHKParsingException(
+                'Expecting at least one statement. Received unexpected EOF', None
+            )
+
+    def _token_gen(self, tokens: Iterable[AHKToken]) -> Generator[AHKToken, None, None]:
+        for tok in tokens:
+            # if self.last_token is None and tok.type != "NEWLINE":
+            #     class t(Token):
+            #         type = "NEWLINE"
+            #         index = 0
+            #         lineno = 0
+            #         value = '\n'
+            #     yield AHKToken(tok=t(), doc=tok.doc)
+            self.last_token = tok
+            self.seen_tokens.append(tok)
+            yield tok
+
+    def parse(self, tokens: Iterable[AHKToken]) -> Program:
+        tokens = self._token_gen(tokens)
+        model: Program
+        model = super().parse(tokens)
+        return model
 
 
 def parse_tokens(raw_tokens: Iterable['Token']) -> Node:
     parser = AHKParser()
-    return parser.parse(raw_tokens)  # type: ignore[no-any-return]
+    return parser.parse(raw_tokens)
 
 
 def parse(text: str) -> Node:
     tokens = tokenize(text)
     model = parse_tokens(tokens)
     return model
+
+
+if __name__ == '__main__':
+    fp = sys.argv[1]
+    with open(fp) as f:
+        text = f.read()
+    print(parse(text))

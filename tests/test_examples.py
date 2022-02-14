@@ -4,46 +4,88 @@ import sys
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec
 from importlib.util import spec_from_file_location
+from textwrap import dedent
 
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')))
-from ahk_ast import model, parser
+from ahk_ast import parser
+from ahk_ast.model import *
+from ahk_ast.tokenizer import tokenize
 
 tests_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'examples'))
 
 
-def load_spec(fp) -> model.Program:
-
-    spec = spec_from_file_location(os.path.basename(fp).replace('.py', ''), fp)
-    mod = module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.model
-
-
-error_specs = []
-specs = []
-
-for root, dirs, files in os.walk(tests_path):
-    for f in files:
-        if f.endswith('.ahk'):
-            specs.append(os.path.join(root, f))
-        elif f.endswith('.invalid-ahk'):
-            error_specs.append(os.path.join(root, f))
+def test_assignment_literal():
+    script = dedent(
+        """\
+        a := 1
+        b := "Hello World!\""""
+    )
+    expected = Program(
+        Assignment(location=Identifier(name='a'), value=Integer(value=1)),
+        Assignment(location=Identifier(name='b'), value=DoubleQuotedString(value='Hello World!')),
+    )
+    model = parser.parse(script)
+    assert model == expected
 
 
-@pytest.mark.parametrize('fp', specs)
-def test_official_files(fp):
-    if not os.path.exists(tests_path):
-        pytest.mark.skip('Tests repo was not present in expected location. Skipping.')
-        return
+def test_two_statements():
+    script = dedent(
+        """\
+        a := 1
+        b := 1"""
+    )
+    expected = Program(
+        Assignment(location=Identifier(name='a'), value=Integer(value=1)),
+        Assignment(location=Identifier(name='b'), value=Integer(value=1)),
+    )
+    model = parser.parse(script)
+    assert model == expected
 
-    spec_file = fp.replace('.ahk', '_spec.py')
-    if not os.path.exists(spec_file):
-        raise Exception(f'Missing spec file, {spec_file}')
 
-    expected = load_spec(spec_file)
-    with open(fp) as f:
-        text = f.read()
-    actual = parser.parse(text)
-    assert actual == expected
+def test_trailing_line_ws():
+    script = 'a := 1\n  \n   \n\n  \n'
+    for t in tokenize(script):
+        print(t)
+    expected = Program(
+        Assignment(location=Identifier(name='a'), value=Integer(value=1)),
+    )
+    model = parser.parse(script)
+    assert model == expected
+
+
+def test_leading_lines_ws():
+    script = '\n  \n\n   \na := 1'
+    for t in tokenize(script):
+        print(t)
+    expected = Program(
+        Assignment(location=Identifier(name='a'), value=Integer(value=1)),
+    )
+    model = parser.parse(script)
+    assert model == expected
+
+
+def test_function_call_statement():
+    script = 'MsgBox "Hello AutoHotkey!"'
+    expected = Program(
+        FunctionCallStatement(
+            func_location=Identifier(name='MsgBox'),
+            arguments=[DoubleQuotedString(value='Hello AutoHotkey!')],
+        )
+    )
+    for t in tokenize(script):
+        print(t)
+    model = parser.parse(script)
+    assert model == expected
+
+
+def test_function_call_statement_no_arguments():
+    script = 'MsgBox'
+    expected = Program(
+        FunctionCallStatement(func_location=Identifier(name='MsgBox'), arguments=None)
+    )
+    for t in tokenize(script):
+        print(t)
+    model = parser.parse(script)
+    assert model == expected

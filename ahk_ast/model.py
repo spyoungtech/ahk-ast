@@ -271,12 +271,12 @@ class ReturnStatement(Statement):
 
 
 class FunctionCall(ExpressionStatement):
-    def __init__(self, name: str, arguments: Union[Sequence[Expression], None]):
-        assert isinstance(name, str)  # can functions be stored at locations?
+    def __init__(self, func_location: Location, arguments: Union[Sequence[Expression], None]):
+        assert isinstance(func_location, Location)  # can functions be stored at locations?
         assert arguments is None or isinstance(arguments, Iterable)
         arguments = tuple(arguments) if arguments else tuple()
         assert all(isinstance(arg, Expression) for arg in arguments)
-        super().__init__(name=name, arguments=arguments)
+        super().__init__(func_location=func_location, arguments=arguments)
 
 
 class FunctionCallStatement(FunctionCall):

@@ -64,28 +64,3 @@ def test_leading_lines_ws():
     )
     model = parser.parse(script)
     assert model == expected
-
-
-def test_function_call_statement():
-    script = 'MsgBox "Hello AutoHotkey!"'
-    expected = Program(
-        FunctionCallStatement(
-            func_location=Identifier(name='MsgBox'),
-            arguments=[DoubleQuotedString(value='Hello AutoHotkey!')],
-        )
-    )
-    for t in tokenize(script):
-        print(t)
-    model = parser.parse(script)
-    assert model == expected
-
-
-def test_function_call_statement_no_arguments():
-    script = 'MsgBox'
-    expected = Program(
-        FunctionCallStatement(func_location=Identifier(name='MsgBox'), arguments=None)
-    )
-    for t in tokenize(script):
-        print(t)
-    model = parser.parse(script)
-    assert model == expected

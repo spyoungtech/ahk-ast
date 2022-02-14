@@ -55,7 +55,7 @@ class AHKParser(Parser):
                 ret.extend(stmts)
         return ret
 
-    @_('assignment_statement', 'function_call_statement')
+    @_('assignment_statement', 'function_call_statement', 'function_call')
     def statement(self, p: YaccProduction) -> Any:
         return p[0]
 
@@ -94,7 +94,11 @@ class AHKParser(Parser):
     def literal(self, p: YaccProduction) -> Any:
         return p[0]
 
-    @_('COMMA [ WHITESPACE ] first_argument')
+    @_('')
+    def seen_additional_arguments(self, p: YaccProduction) -> Any:
+        self.expecting.append(['expression'])
+
+    @_('COMMA [ WHITESPACE ] [ seen_additional_arguments first_argument ]')
     def additional_arguments(self, p: YaccProduction) -> Any:
         return p.first_argument
 
@@ -103,22 +107,42 @@ class AHKParser(Parser):
         return p[0]
 
     @_('first_argument { additional_arguments }')
-    def function_call_statement_arguments(self, p: YaccProduction) -> Any:
+    def function_call_arguments(self, p: YaccProduction) -> Any:
         args = [p.first_argument]
         for a in p.additional_arguments:
             args.append(a)
         return args
 
     @_('')
-    def seen_function_call_statement_start(self, p: YaccProduction) -> Any:
+    def seen_function_call_arguments_start(self, p: YaccProduction) -> Any:
         self.expecting.append(['expression'])
 
-    @_(
-        'location [ WHITESPACE ] [ seen_function_call_statement_start function_call_statement_arguments ]'
-    )
+    @_('location [ WHITESPACE ] [ seen_function_call_arguments_start function_call_arguments ]')
     def function_call_statement(self, p: YaccProduction) -> FunctionCallStatement:
         return FunctionCallStatement(
-            func_location=p.location, arguments=p.function_call_statement_arguments
+            func_location=p.location,
+            arguments=[arg for arg in p.function_call_arguments if arg]
+            if p.function_call_arguments
+            else None,
+        )
+
+    @_('')
+    def function_call_seen(self, p: YaccProduction) -> Any:
+        self.expecting.append(['RPAREN'])
+
+    @_('')
+    def seen_RPAREN(self, p: YaccProduction) -> Any:
+        self.expecting.pop()
+
+    @_(
+        'location LPAREN function_call_seen [ WHITESPACE ] [ seen_function_call_arguments_start function_call_arguments ] seen_RPAREN RPAREN'
+    )
+    def function_call(self, p: YaccProduction) -> FunctionCall:
+        return FunctionCall(
+            func_location=p.location,
+            arguments=[arg for arg in p.function_call_arguments if arg]
+            if p.function_call_arguments
+            else None,
         )
 
     def error(self, token: Union[AHKToken, None]) -> NoReturn:

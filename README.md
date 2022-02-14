@@ -12,9 +12,9 @@ linters, code formatters, compilers, and more.
 
 Goals:
 
-- Define a formal grammar for AutoHotkey
+- Define a formal grammar for [AutoHotkey V2](https://lexikos.github.io/v2/docs/v2-changes.htm)
 - Ability to tokenize AutoHotkey code
-- Ability to generate an abstract syntax tree (AST) from AutoHotkey code
+- Ability to generate an abstract syntax tree (AST) from AutoHotkey V2 code
 
 
 Extended goals:

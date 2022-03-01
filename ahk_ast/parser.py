@@ -71,9 +71,9 @@ class AHKParser(Parser):
     def assignment_statement(self, p: YaccProduction) -> Assignment:
         return Assignment(location=p.location, value=p.expression)
 
-    @_('literal', 'location')
+    @_('literal', 'location', 'bin_op')
     def expression(self, p: YaccProduction) -> Any:
-        self.expecting.pop()
+        # self.expecting.pop()
         return p[0]
 
     @_('INTEGER')
@@ -144,6 +144,14 @@ class AHKParser(Parser):
             if p.function_call_arguments
             else None,
         )
+
+    @_('PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'INT_DIVIDE', 'EXP')
+    def bin_operator(self, p: YaccProduction) -> Any:
+        return p[0]
+
+    @_('expression [ WHITESPACE ] bin_operator [ WHITESPACE ] expression')
+    def bin_op(self, p: YaccProduction) -> BinOp:
+        return BinOp(op=p.bin_operator, left=p.expression0, right=p.expression1)
 
     def error(self, token: Union[AHKToken, None]) -> NoReturn:
         if token:

@@ -121,6 +121,8 @@ class BinOp(Expression):
     def __init__(self, op: str, left: Expression, right: Expression):
         assert isinstance(op, str)
         assert op in (
+            '**',
+            '//',
             '+',
             '-',
             '*',

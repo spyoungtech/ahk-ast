@@ -42,7 +42,7 @@ class AHKTokenizeError(AHKDecodeError):
         return self.__class__, (self.msg, self.token)
 
 
-class AHKParsingException(AHKDecodeError):
+class ParsingException(AHKDecodeError):
     def __init__(self, msg: str, token: Any):
         lineno = getattr(token, 'lineno', 0)
         index = getattr(token, 'index', 0)
@@ -61,5 +61,5 @@ class AHKParsingException(AHKDecodeError):
         return self.__class__, (self.msg, self.token)
 
 
-class InvalidHotkeyException(AHKParsingException):
+class InvalidHotkeyException(ParsingException):
     ...

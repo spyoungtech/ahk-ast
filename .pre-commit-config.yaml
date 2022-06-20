@@ -19,6 +19,8 @@ repos:
             - "-S"
             - "-l"
             - "100"
+            - "--force-exclude"
+            - "types.py"
 
 
 -   repo: https://github.com/pre-commit/mirrors-mypy

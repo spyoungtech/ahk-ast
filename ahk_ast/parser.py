@@ -1,7 +1,4 @@
-import sys
 from typing import Any
-from typing import Generator
-from typing import NoReturn
 from typing import Sequence
 from typing import Union
 
@@ -10,8 +7,6 @@ from sly.lex import Token  # type: ignore[import]
 from sly.yacc import YaccProduction  # type: ignore[import]
 
 from .errors import AHKAstBaseException
-from .errors import AHKDecodeError
-from .errors import AHKParsingException
 from .errors import InvalidHotkeyException
 from .model import *
 from .tokenizer import AHKLexer
@@ -22,7 +17,37 @@ from .tokenizer import tokenize
 class AHKParser(Parser):
     debugfile = 'parser.out'
     tokens = AHKLexer.tokens
-    start = 'program'
+    precedence = [
+        ('left', LOR, OR),  # a || b
+        ('left', LAND, AND),  # a && b
+        (
+            'left',
+            LT,
+            LE,
+            GT,
+            GE,
+            EQ,
+            NE,
+            SEQ,
+            SNE,
+            REMATCH,
+            IN,
+            IS,
+        ),  #  2 + 3 < 4 + 5   -> (2 + 3) <  (4 + 5)
+        ('left', PLUS, MINUS),  # Lower precedence      2 + 3 + 4 --> (2+3) + 4
+        (
+            'left',
+            TIMES,
+            DIVIDE,
+        ),
+        ('left', EXP),
+        ('left', TERNARY),
+        ('right', DEREF),
+        ('right', DOUBLE_DEREF)
+        # Higher precedence     2 + 3 * 4 --> 2 + (3 * 4)  (preference for the TIMES)
+        # Unary -x.   -> Super high precedence    2 * -x.
+        # ("right", UNARY),  # 'UNARY' is a fake token (does not exist in tokenizer)
+    ]
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
@@ -32,178 +57,164 @@ class AHKParser(Parser):
         self.last_token = None
         self.seen_tokens: list[AHKToken]
         self.seen_tokens = []
-        self.expecting: list[list[str]]
+        self.expecting: list[AHKToken]
         self.expecting = []
 
-    @_('WHITESPACE', 'NEWLINE')
-    def wsc(self, p: YaccProduction) -> Any:
+    @_('statements')
+    def program(self, p: YaccProduction) -> Any:
         return p[0]
 
-    @_('{ wsc } statements { wsc }')
-    def program(self, p: YaccProduction) -> Any:
-        return Program(*p.statements)
-
-    @_('NEWLINE [ WHITESPACE ] [ statements ]')
-    def additional_statement(self, p: YaccProduction) -> Any:
-        return p.statements
-
-    @_('statement { additional_statement }')
+    # statements : { statement }      # zero or more statements { }
+    @_('{ statement }')
     def statements(self, p: YaccProduction) -> Any:
-        ret = [p.statement]
-        for stmts in p.additional_statement:
-            if stmts:
-                ret.extend(stmts)
-        return ret
+        # p.statement   --- it's already a list of statement (by SLY)
+        return Program(*p.statement)
 
-    @_('assignment_statement', 'function_call_statement', 'function_call')
+    @_(
+        'assignment_statement',
+        # 'augmented_assignment_statement',
+        # 'if_statement',
+        # 'loop_statement',
+        # 'while_statement',
+        # 'class_definition',
+        # 'function_definition',
+        # 'hotkey_definition',
+        # 'for_statement',
+        # 'try_statement',
+        # 'variable_declaration',
+        # 'expression_statement',
+        'return_statement',
+        'function_call_statement',
+    )
     def statement(self, p: YaccProduction) -> Any:
         return p[0]
 
+    @_('RETURN [ WHITESPACE expression ]')
+    def return_statement(self, p: YaccProduction) -> Any:
+        return ReturnStatement(expression=p.expression)
+
+    @_('PERCENT NAME %prec DEREF', 'PERCENT NAME PERCENT %prec DOUBLE_DEREF')
+    def location(self, p: YaccProduction) -> Any:
+        return Identifier(name=p.name)
+
+    @_(
+        # 'grouping'
+        'ternary_expression',
+        'function_call',
+        'location',
+    )
+    def expression_statement(self, p: YaccProduction) -> Any:
+        return p[0]
+
+    @_(
+        'expression EXP [ WHITESPACE ] expression',
+        'expression PLUS [ WHITESPACE ] expression',
+        'expression MINUS [ WHITESPACE ] expression',
+        'expression TIMES [ WHITESPACE ] expression',
+        'expression DIVIDE [ WHITESPACE ] expression',
+        'expression LT [ WHITESPACE ] expression',
+        'expression LE [ WHITESPACE ] expression',
+        'expression GT [ WHITESPACE ] expression',
+        'expression GE [ WHITESPACE ] expression',
+        'expression EQ [ WHITESPACE ] expression',
+        'expression SEQ [ WHITESPACE ] expression',
+        'expression NE [ WHITESPACE ] expression',
+        'expression SNE [ WHITESPACE ] expression',
+        'expression LAND [ WHITESPACE ] expression',
+        'expression REMATCH [ WHITESPACE ] expression',
+        'expression LOR [ WHITESPACE ] expression',
+        'expression AND [ WHITESPACE ] expression',
+        'expression OR [ WHITESPACE ] expression',
+        'expression IN [ WHITESPACE ] expression',
+        'expression IS [ WHITESPACE ] expression',
+    )
+    def bin_op(self, p: YaccProduction) -> Any:
+        op = p[1]
+        left = p.expression0
+        right = p.expression1
+        return BinOp(op=op, left=left, right=right)
+
+    @_(
+        'expression QUESTION [ WHITESPACE ] expression COLON [ WHITESPACE ] expression %prec TERNARY'
+    )
+    def ternary_expression(self, p: YaccProduction) -> Any:
+        condition = p.expression0
+        consequent = p.expression1
+        alternative = p.expression2
+        return TernaryExpression(
+            condition=condition, consequent=consequent, alternative=alternative
+        )
+
     @_('NAME')
     def location(self, p: YaccProduction) -> Any:
-        return Identifier(name=p[0])
+        return Identifier(name=p.NAME)
 
-    @_('')
-    def seen_ASSIGN(self, p: YaccProduction) -> Any:
-        self.expecting.append(['expression'])
+    @_('TRUE')
+    def expression(self) -> Any:
+        return Bool(True)
 
-    @_('location [ WHITESPACE ] ASSIGN seen_ASSIGN [ WHITESPACE ] expression')
-    def assignment_statement(self, p: YaccProduction) -> Assignment:
-        return Assignment(location=p.location, value=p.expression)
+    @_('FALSE')
+    def expression(self) -> Any:
+        return Bool(False)
 
-    @_('literal', 'location')
+    @_(
+        'expression_statement',
+        'bin_op',
+    )
     def expression(self, p: YaccProduction) -> Any:
-        self.expecting.pop()
         return p[0]
+
+    @_('NAME LPAREN [ WHITESPACE ] RPAREN')
+    def function_call(self, p: YaccProduction) -> Any:
+        return FunctionCall(name=p.NAME, arguments=None)
+
+    @_('NAME LPAREN [ WHITESPACE ] arguments RPAREN')
+    def function_call(self, p: YaccProduction) -> Any:
+        function_name = p.NAME
+        return FunctionCall(name=function_name, arguments=p.arguments)
 
     @_('INTEGER')
-    def literal(self, p: YaccProduction) -> Integer:
-        return Integer(value=int(p[0]))
+    def expression(self, p: YaccProduction) -> Any:
+        return Integer(value=int(p.INTEGER))
 
-    @_('DOUBLE_QUOTED_STRING')
-    def string(self, p: YaccProduction) -> DoubleQuotedString:
-        # TODO: unescape value
-        return DoubleQuotedString(value=p[0][1:-1])
+    @_('NEWLINE [ WHITESPACE ] NAME [ WHITESPACE ] [ arguments ] terminator')
+    def function_call_statement(self, p: YaccProduction) -> FunctionCall:
+        return FunctionCall(name=p.NAME, arguments=p.arguments)
 
-    @_('SINGLE_QUOTED_STRING')
-    def string(self, p: YaccProduction) -> SingleQuotedString:
-        # TODO: unescape value
-        return SingleQuotedString(value=p[0][1:-1])
-
-    @_('string')
-    def literal(self, p: YaccProduction) -> Any:
-        return p[0]
-
-    @_('')
-    def seen_additional_arguments(self, p: YaccProduction) -> Any:
-        self.expecting.append(['expression'])
-
-    @_('COMMA [ WHITESPACE ] [ seen_additional_arguments first_argument ]')
+    @_('COMMA [ WHITESPACE ] first_argument')
     def additional_arguments(self, p: YaccProduction) -> Any:
         return p.first_argument
 
-    @_('expression [ WHITESPACE ]')
+    @_('expression')
     def first_argument(self, p: YaccProduction) -> Any:
         return p[0]
 
     @_('first_argument { additional_arguments }')
-    def function_call_arguments(self, p: YaccProduction) -> Any:
+    def arguments(self, p: YaccProduction) -> Any:
         args = [p.first_argument]
         for a in p.additional_arguments:
             args.append(a)
         return args
 
-    @_('')
-    def seen_function_call_arguments_start(self, p: YaccProduction) -> Any:
-        self.expecting.append(['expression'])
+    @_('location [ WHITESPACE ] ASSIGN [ WHITESPACE ] expression terminator')
+    def assignment_statement(self, p: YaccProduction) -> Any:
+        return Assignment(location=p.location, value=p.expression)
 
-    @_('location [ WHITESPACE ] [ seen_function_call_arguments_start function_call_arguments ]')
-    def function_call_statement(self, p: YaccProduction) -> FunctionCallStatement:
-        return FunctionCallStatement(
-            func_location=p.location,
-            arguments=[arg for arg in p.function_call_arguments if arg]
-            if p.function_call_arguments
-            else None,
-        )
+    @_('NEWLINE')
+    def terminator(self, p: YaccProduction) -> Any:
+        return p[0]
 
-    @_('')
-    def function_call_seen(self, p: YaccProduction) -> Any:
-        self.expecting.append(['RPAREN'])
-
-    @_('')
-    def seen_RPAREN(self, p: YaccProduction) -> Any:
-        self.expecting.pop()
-
-    @_(
-        'location LPAREN function_call_seen [ WHITESPACE ] [ seen_function_call_arguments_start function_call_arguments ] seen_RPAREN RPAREN'
-    )
-    def function_call(self, p: YaccProduction) -> FunctionCall:
-        return FunctionCall(
-            func_location=p.location,
-            arguments=[arg for arg in p.function_call_arguments if arg]
-            if p.function_call_arguments
-            else None,
-        )
-
-    def error(self, token: Union[AHKToken, None]) -> NoReturn:
-        if token:
-            if self.expecting:
-                expected = self.expecting[-1]
-
-                message = f"Syntax Error. Was expecting {' or '.join(expected)}"
-            else:
-                message = 'Syntax Error'
-            raise AHKParsingException(message, token)
-
-        elif self.last_token:
-            doc = self.last_token.doc
-            pos = len(doc)
-            lineno = doc.count('\n', 0, pos) + 1
-            colno = pos - doc.rfind('\n', 0, pos)
-            message = f'Unexpected EOF at: ' f'line {lineno} column {colno} (char {pos})'
-            if self.expecting:
-                expected = self.expecting[-1]
-                message += f'. Was expecting {" or ".join(expected)}'
-            raise AHKParsingException(message, None)
-        else:
-            #  Empty file
-            raise AHKParsingException(
-                'Expecting at least one statement. Received unexpected EOF', None
-            )
-
-    def _token_gen(self, tokens: Iterable[AHKToken]) -> Generator[AHKToken, None, None]:
-        for tok in tokens:
-            # if self.last_token is None and tok.type != "NEWLINE":
-            #     class t(Token):
-            #         type = "NEWLINE"
-            #         index = 0
-            #         lineno = 0
-            #         value = '\n'
-            #     yield AHKToken(tok=t(), doc=tok.doc)
-            self.last_token = tok
-            self.seen_tokens.append(tok)
-            yield tok
-
-    def parse(self, tokens: Iterable[AHKToken]) -> Program:
-        tokens = self._token_gen(tokens)
-        model: Program
-        model = super().parse(tokens)
-        return model
+    @_('expression WHITESPACE')
+    def expression(self, p: YaccProduction) -> Any:
+        return p[0]
 
 
 def parse_tokens(raw_tokens: Iterable['Token']) -> Node:
     parser = AHKParser()
-    return parser.parse(raw_tokens)
+    return parser.parse(raw_tokens)  # type: ignore[no-any-return]
 
 
 def parse(text: str) -> Node:
     tokens = tokenize(text)
     model = parse_tokens(tokens)
     return model
-
-
-if __name__ == '__main__':
-    fp = sys.argv[1]
-    with open(fp) as f:
-        text = f.read()
-    print(parse(text))

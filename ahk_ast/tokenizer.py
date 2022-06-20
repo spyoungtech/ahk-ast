@@ -40,9 +40,7 @@ class AHKLexer(Lexer):
 
     regex_module = re
     reflags = re.MULTILINE
-
     tokens = {
-        EOF,
         ARROW,
         AMP,
         HASH,
@@ -50,8 +48,8 @@ class AHKLexer(Lexer):
         RBRACE,
         LBRACKET,
         RBRACKET,
-        DOUBLE_QUOTED_STRING,
-        SINGLE_QUOTED_STRING,
+        DOUBLE_QUOTE_STRING,
+        SINGLE_QUOTE_STRING,
         UNTERMINATED_DOUBLE_QUOTE_STRING,
         UNTERMINATED_SINGLE_QUOTE_STRING,
         NAME,
@@ -174,8 +172,8 @@ class AHKLexer(Lexer):
     #     # r'\\\d{1,3}',
     #     # r'\\x[a-fA-F0-9]{1,2}',
     # ]
-    DOUBLE_QUOTED_STRING = r'"(?:[^"`]|`.)*"'
-    SINGLE_QUOTED_STRING = r"'(?:[^'`]|`.)*'"
+    DOUBLE_QUOTE_STRING = r'"(?:[^"`]|`.)*"'
+    SINGLE_QUOTE_STRING = r"'(?:[^'`]|`.)*'"
 
     # Specify tokens as regex rules
     DOLLAR = r'\$'
@@ -283,7 +281,7 @@ class AHKLexer(Lexer):
     DCOLON = r'::'
     COLON = r':'
 
-    def tokenize(self, text: str, *args: Any, **kwargs: Any) -> Generator[AHKToken, None, None]:
+    def tokenize(self, text: str, *args: Any, **kwargs: Any) -> Generator[Token, None, None]:
         for tok in super().tokenize(text, *args, **kwargs):
             tok = AHKToken(tok, text)
             yield tok

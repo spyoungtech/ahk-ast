@@ -238,7 +238,4 @@ string : SINGLE_QUOTED_STRING
                                                                 # spaces are expressed here because it is needed for
                                                                 # disambiguation from lookups (see ``location :``)
 
-function_call_statement_arguments
-function_call_statement : NEWLINE [ WHITESPACE ] NAME [ WHITESPACE ] [ arguments ] terminator
-
 empty  :

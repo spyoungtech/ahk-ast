@@ -210,6 +210,14 @@ class IfStatement(Statement):
         super().__init__(condition=condition, consequent=consequent, alternative=alternative)
 
 
+class TernaryExpression(ExpressionStatement):
+    def __init__(self, condition: Expression, consequent: Expression, alternative: Expression):
+        assert isinstance(condition, Expression)
+        assert isinstance(consequent, Expression)
+        assert isinstance(alternative, Expression)
+        super().__init__(condition=condition, consequent=consequent, alternative=alternative)
+
+
 class Assignment(Statement):
     """
     location ASSIGN expression SEMI

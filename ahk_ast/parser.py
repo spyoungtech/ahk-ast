@@ -17,6 +17,37 @@ from .tokenizer import tokenize
 class AHKParser(Parser):
     debugfile = 'parser.out'
     tokens = AHKLexer.tokens
+    precedence = [
+        ('left', LOR, OR),  # a || b
+        ('left', LAND, AND),  # a && b
+        (
+            'left',
+            LT,
+            LE,
+            GT,
+            GE,
+            EQ,
+            NE,
+            SEQ,
+            SNE,
+            REMATCH,
+            IN,
+            IS,
+        ),  #  2 + 3 < 4 + 5   -> (2 + 3) <  (4 + 5)
+        ('left', PLUS, MINUS),  # Lower precedence      2 + 3 + 4 --> (2+3) + 4
+        (
+            'left',
+            TIMES,
+            DIVIDE,
+        ),
+        ('left', EXP),
+        ('left', TERNARY),
+        ('right', DEREF),
+        ('right', DOUBLE_DEREF)
+        # Higher precedence     2 + 3 * 4 --> 2 + (3 * 4)  (preference for the TIMES)
+        # Unary -x.   -> Super high precedence    2 * -x.
+        # ("right", UNARY),  # 'UNARY' is a fake token (does not exist in tokenizer)
+    ]
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
@@ -51,8 +82,9 @@ class AHKParser(Parser):
         # 'for_statement',
         # 'try_statement',
         # 'variable_declaration',
-        'expression_statement',
+        # 'expression_statement',
         'return_statement',
+        'function_call_statement',
     )
     def statement(self, p: YaccProduction) -> Any:
         return p[0]
@@ -61,48 +93,57 @@ class AHKParser(Parser):
     def return_statement(self, p: YaccProduction) -> Any:
         return ReturnStatement(expression=p.expression)
 
+    @_('PERCENT NAME %prec DEREF', 'PERCENT NAME PERCENT %prec DOUBLE_DEREF')
+    def location(self, p: YaccProduction) -> Any:
+        return Identifier(name=p.name)
+
     @_(
         # 'grouping'
-        # 'deref'
-        'function_call'
-        # 'tenary_expression'
+        'ternary_expression',
+        'function_call',
+        'location',
     )
     def expression_statement(self, p: YaccProduction) -> Any:
         return p[0]
 
     @_(
-        'EXP',
-        'PLUS',
-        'MINUS',
-        'TIMES',
-        'DIVIDE',
-        'LT',
-        'LE',
-        'GT',
-        'GE',
-        'EQ',
-        'SEQ',
-        'NE',
-        'SNE',
-        'LAND',
-        'REMATCH',
-        'LOR',
-        'AND',
-        'OR',
-        'IN',
-        'IS',
-    )
-    def bin_operator(self, p: YaccProduction) -> Any:
-        return p[0]
-
-    @_(
-        'expression [ WHITESPACE ] bin_operator [ WHITESPACE ] expression',
+        'expression EXP [ WHITESPACE ] expression',
+        'expression PLUS [ WHITESPACE ] expression',
+        'expression MINUS [ WHITESPACE ] expression',
+        'expression TIMES [ WHITESPACE ] expression',
+        'expression DIVIDE [ WHITESPACE ] expression',
+        'expression LT [ WHITESPACE ] expression',
+        'expression LE [ WHITESPACE ] expression',
+        'expression GT [ WHITESPACE ] expression',
+        'expression GE [ WHITESPACE ] expression',
+        'expression EQ [ WHITESPACE ] expression',
+        'expression SEQ [ WHITESPACE ] expression',
+        'expression NE [ WHITESPACE ] expression',
+        'expression SNE [ WHITESPACE ] expression',
+        'expression LAND [ WHITESPACE ] expression',
+        'expression REMATCH [ WHITESPACE ] expression',
+        'expression LOR [ WHITESPACE ] expression',
+        'expression AND [ WHITESPACE ] expression',
+        'expression OR [ WHITESPACE ] expression',
+        'expression IN [ WHITESPACE ] expression',
+        'expression IS [ WHITESPACE ] expression',
     )
     def bin_op(self, p: YaccProduction) -> Any:
-        op = p.bin_operator
+        op = p[1]
         left = p.expression0
         right = p.expression1
         return BinOp(op=op, left=left, right=right)
+
+    @_(
+        'expression QUESTION [ WHITESPACE ] expression COLON [ WHITESPACE ] expression %prec TERNARY'
+    )
+    def ternary_expression(self, p: YaccProduction) -> Any:
+        condition = p.expression0
+        consequent = p.expression1
+        alternative = p.expression2
+        return TernaryExpression(
+            condition=condition, consequent=consequent, alternative=alternative
+        )
 
     @_('NAME')
     def location(self, p: YaccProduction) -> Any:
@@ -119,7 +160,6 @@ class AHKParser(Parser):
     @_(
         'expression_statement',
         'bin_op',
-        'location',
     )
     def expression(self, p: YaccProduction) -> Any:
         return p[0]
@@ -138,14 +178,14 @@ class AHKParser(Parser):
         return Integer(value=int(p.INTEGER))
 
     @_('NEWLINE [ WHITESPACE ] NAME [ WHITESPACE ] [ arguments ] terminator')
-    def function_call(self, p: YaccProduction) -> FunctionCall:
+    def function_call_statement(self, p: YaccProduction) -> FunctionCall:
         return FunctionCall(name=p.NAME, arguments=p.arguments)
 
     @_('COMMA [ WHITESPACE ] first_argument')
     def additional_arguments(self, p: YaccProduction) -> Any:
         return p.first_argument
 
-    @_('expression [ WHITESPACE ]')
+    @_('expression')
     def first_argument(self, p: YaccProduction) -> Any:
         return p[0]
 
@@ -162,6 +202,10 @@ class AHKParser(Parser):
 
     @_('NEWLINE')
     def terminator(self, p: YaccProduction) -> Any:
+        return p[0]
+
+    @_('expression WHITESPACE')
+    def expression(self, p: YaccProduction) -> Any:
         return p[0]
 
 
